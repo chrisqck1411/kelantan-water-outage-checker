@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kelantan Water Outage Checker — AKSB Notices</title>
+<style>
+  :root {
+    --bg: #f6f8f9;
+    --card: #ffffff;
+    --ink: #22313a;
+    --muted: #6b7c86;
+    --line: #dfe6e9;
+    --accent: #1a7a8a;
+    --accent-soft: #e6f3f5;
+    --warn: #b26a00;
+    --warn-soft: #fdf3e3;
+    --match: #fff7d6;
+    --match-border: #e0b400;
+    --ok: #1e7d43;
+    --ok-soft: #e7f5ec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 60px; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+    padding: 8px 0 12px;
+  }
+  header.top h1 { font-size: 1.5rem; margin: 0; }
+  header.top .sub { color: var(--muted); font-size: .95rem; }
+  .source-tag {
+    display: inline-block; font-size: .75rem; background: var(--accent-soft);
+    color: var(--accent); border: 1px solid #c9e2e7; border-radius: 20px;
+    padding: 2px 10px; margin-left: auto;
+  }
+  .data-status {
+    font-size: .85rem; color: var(--muted); background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 28px;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .data-status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex: none; }
+  .data-status.live .dot { background: var(--ok); }
+  .data-status .grow { flex: 1; }
+
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+  section h2 { font-size: 1.15rem; margin: 0 0 4px; }
+  section .desc { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+
+  /* ---- Outage cards ---- */
+  .cards { display: grid; gap: 14px; }
+  .card {
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: #fcfdfd;
+  }
+  .card.matched {
+    background: var(--match);
+    border-color: var(--match-border);
+    border-left-color: var(--match-border);
+  }
+  .card .row1 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .type-badge {
+    font-size: .78rem; font-weight: 600; padding: 2px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .type-badge.unplanned { background: #fbe9e7; color: #b03a2e; }
+  .district-badge {
+    font-size: .78rem; padding: 2px 10px; border-radius: 20px;
+    background: #eef1f2; color: var(--ink); border: 1px solid var(--line);
+  }
+  .status-badge {
+    font-size: .75rem; padding: 2px 10px; border-radius: 20px;
+    background: var(--ok-soft); color: var(--ok); border: 1px solid #bfe3cd;
+  }
+  .match-flag { display: none; font-size: .78rem; font-weight: 600; color: #8a6d00; }
+  .card.matched .match-flag { display: inline; }
+  .card h3 { font-size: .98rem; margin: 0 0 6px; }
+  .card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: .92rem; }
+  .card dt { color: var(--muted); }
+  .card dd { margin: 0; }
+  .locations { margin-top: 8px; font-size: .9rem; }
+  .locations .lbl { color: var(--muted); }
+  .loc-chip {
+    display: inline-block; background: #eef1f2; border: 1px solid var(--line);
+    border-radius: 6px; padding: 1px 8px; margin: 3px 4px 0 0; font-size: .83rem;
+  }
+  .loc-chip.hit { background: var(--match); border-color: var(--match-border); }
+  .note { margin-top: 8px; font-size: .88rem; }
+  .note .lbl { color: var(--muted); }
+  .source-link { font-size: .8rem; }
+
+  /* ---- Controls ---- */
+  .matcher-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 200px; flex: 1; }
+  .field label { font-size: .85rem; font-weight: 600; }
+  select, input[type="text"] {
+    font: inherit; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; color: var(--ink); width: 100%;
+  }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+  .btn {
+    font: inherit; padding: 9px 16px; border: 1px solid var(--line); border-radius: 8px;
+    background: #fff; cursor: pointer; color: var(--ink);
+  }
+  .btn:hover { background: #f0f4f5; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #156373; }
+  .btn:disabled { opacity: .6; cursor: wait; }
+
+  .matcher-result { font-size: .92rem; color: var(--muted); margin-bottom: 12px; }
+  .matcher-result strong { color: var(--ink); }
+  .empty-note {
+    border: 1px dashed var(--line); border-radius: 8px; padding: 14px;
+    color: var(--muted); font-size: .92rem; background: #fafbfb;
+  }
+
+  /* ---- Live notice view ---- */
+  .live-summary {
+    background: var(--accent-soft); border: 1px solid #c9e2e7; border-radius: 8px;
+    padding: 12px 14px; font-size: .92rem; margin-bottom: 14px;
+  }
+  .live-summary ul { margin: 6px 0 0; padding-left: 18px; }
+  .live-list { display: grid; gap: 10px; }
+  .live-item {
+    border: 1px solid var(--match-border); background: var(--match);
+    border-radius: 8px; padding: 10px 14px; font-size: .92rem;
+  }
+  .live-item .t { font-weight: 600; }
+  .live-item .meta { color: #5c5310; font-size: .88rem; margin-top: 2px; }
+
+  footer { color: var(--muted); font-size: .82rem; text-align: center; margin-top: 30px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Kelantan Water Outage Checker</h1>
+    <span class="sub">Notis gangguan bekalan air AKSB &middot; scan &middot; match your area</span>
+    <a class="source-tag" href="https://airkelantan.com.my/notis-makluman-gangguan-bekalan-air/" target="_blank" rel="noopener">Source: airkelantan.com.my</a>
+  </header>
+
+  <div class="data-status" id="dataStatus">
+    <span class="dot"></span>
+    <span id="dataStatusText">Loading notices…</span>
+    <span class="grow"></span>
+    <button class="btn" id="refreshBtn" type="button">Refresh live data</button>
+  </div>
+
+  <!-- SECTION 1: OUTAGE LIST -->
+  <section id="section-list">
+    <h2>1. Outage List</h2>
+    <p class="desc">All current AKSB notices, structured into cards. Scan the type, timing, district and affected locations.</p>
+    <div class="matcher-controls">
+      <div class="field" style="max-width:280px;">
+        <label for="quickFilter">Quick filter — type a place name</label>
+        <input type="text" id="quickFilter" placeholder="e.g. Laloh, Wakaf Bharu, Tanah Merah">
+      </div>
+      <button class="btn" id="clearFilter" type="button">Clear filter</button>
+    </div>
+    <div class="matcher-result" id="listCount"></div>
+    <div class="cards" id="outageCards"></div>
+    <div class="empty-note" id="listEmpty" style="display:none;">
+      No notices match that place name. Try another spelling, or clear the filter.
+    </div>
+  </section>
+
+  <!-- SECTION 2: AREA MATCHER -->
+  <section id="section-matcher">
+    <h2>2. Area Matcher</h2>
+    <p class="desc">Choose your district and/or type a location to find notices that affect you.</p>
+    <div class="matcher-controls">
+      <div class="field">
+        <label for="districtSel">District (jajahan)</label>
+        <select id="districtSel">
+          <option value="">— All districts —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="locationInput">Location (bandar, kampung or street)</label>
+        <input type="text" id="locationInput" placeholder="e.g. Kg Laloh, Bandar Bachok, Hospital Jeli">
+      </div>
+      <button class="btn primary" id="matchBtn" type="button">Find my area</button>
+      <button class="btn" id="matchClear" type="button">Reset</button>
+    </div>
+    <div class="matcher-result" id="matcherResult"></div>
+    <div class="empty-note" id="matcherEmpty" style="display:none;">
+      No notices found for that district / location. Not every area is affected right now.
+    </div>
+    <div class="cards" id="matcherCards"></div>
+  </section>
+
+  <!-- SECTION 3: LIVE NOTICE VIEW -->
+  <section id="section-live">
+    <h2>3. Live Notice View</h2>
+    <p class="desc">Your current matched notices stay visible here while you search, with a short summary.</p>
+    <div class="live-summary" id="liveSummary"></div>
+    <div class="live-list" id="liveList"></div>
+    <div class="empty-note" id="liveNone" style="display:none;">
+      Nothing matched yet. Pick a district or type a location above, and matching notices will appear here at a glance.
+    </div>
+  </section>
+
+  <footer>
+    Notices parsed from the official AKSB page
+    (<a href="https://airkelantan.com.my/notis-makluman-gangguan-bekalan-air/" target="_blank" rel="noopener">airkelantan.com.my</a>).
+    This app is an unofficial helper and is not affiliated with Air Kelantan Sdn. Bhd. — always confirm with AKSB (hotline 15777) for official information.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SOURCE_URL = "https://airkelantan.com.my/notis-makluman-gangguan-bekalan-air/";
+  var SNAPSHOT_TIME = "18 Nov 2026 (when this file was built)";
+
+  // =====================================================================
+  // EMBEDDED SNAPSHOT — parsed from the real AKSB notices page on 18 Nov 2026.
+  // Used instantly on load, and as fallback if the live fetch fails.
+  // =====================================================================
+  var NOTICES_SNAPSHOT = [
+    {
+      id: "s1",
+      type: "Planned maintenance",
+      unplanned: false,
+      status: "Dalam Tindakan",
+      title: "Kerja-kerja Penukaran Valve Di Intake Loji Rawatan Air (LRA) Bukit Remah",
+      start: "18/11/2026 09:00 AM",
+      end: "19/11/2026 09:00 AM",
+      district: "Tanah Merah",
+      accounts: "± 13,766 akaun",
+      locations: ["Bandar Tanah Merah", "Hospital Tanah Merah", "Kg Sat Hulu dan Hilir", "Kg Tepi Sungai", "Kota Harmoni", "Kg Pasir Panji", "Kg Kenerak", "Kg Bechah Laut", "Kg Kelewek", "Kg Batu Hitam", "Kg Manal", "Jalan Jedok", "Jalan Wan Ahmad", "Kg Banggol Kemunting", "Kg Padang Siam", "Kg Bukit Gading", "Kg Gual Ipoh", "Kg Kusial", "Kg Bukit Mas", "Taman Sri Hawa", "Taman Kisana", "Taman Desa Impian", "Taman Desa Fajar", "Taman Desa Fatin", "Taman Guru", "Taman Tanah Merah", "Jalan Banggol", "Jalan Banggol Jenerih", "Taman Ten", "Taman Jintan KB", "Kg Padang Che Minah", "Taman Desa Rahmat", "Kg Paloh", "Kg Bukit Panau", "Kg Bendang Baru", "dan kawasan sekitar"],
+      note: "Pelanggan akan mengalami gangguan kualiti dan tekanan air sepanjang kerja-kerja dijalankan."
+    },
+    {
+      id: "s2",
+      type: "Planned maintenance",
+      unplanned: false,
+      status: "Dalam Tindakan",
+      title: "Kerja-kerja Tee Off / Projek Pengalihan Paip Di Belakang Pejabat Tanah, Tanah Merah",
+      start: "17/11/2026 05:00 PM",
+      end: "17/11/2026 12:00 AM",
+      district: "Tanah Merah",
+      accounts: "± 1,062 akaun",
+      locations: ["Dalam Bandar", "Kg Sat Hilir", "Kg Sat Tengah", "Kg Sat Hulu"],
+      note: "Bekalan air akan beransur pulih secara berperingkat dalam tempoh 24 jam selepas kerja selesai."
+    },
+    {
+      id: "s3",
+      type: "Repair in progress",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Pembaikan Dan Pencucian Strainer Pam Di Loji Rawatan Air Bukit Remah, Tanah Merah",
+      start: "15/11/2026 12:00 AM",
+      end: "18/11/2026 12:00 AM",
+      district: "Tanah Merah",
+      accounts: "± 13,766 akaun",
+      locations: ["Bandar Tanah Merah", "Hospital Tanah Merah", "Kg Sat Hulu dan Hilir", "Kg Tepi Sungai", "Kota Harmoni", "Kg Pasir Panji", "Kg Kenerak", "Kg Bechah Laut", "Kg Kelewek", "Kg Batu Hitam", "Kg Manal", "Jalan Jedok", "Jalan Wan Ahmad", "Kg Banggol Kemunting", "Kg Padang Siam", "Kg Bukit Gading", "Kg Gual Ipoh", "Kg Kusial", "Kg Bukit Mas", "Taman Sri Hawa", "Taman Kisana", "Taman Desa Impian", "Taman Desa Fajar", "Taman Desa Fatin", "Taman Guru", "Taman Tanah Merah", "Jalan Banggol", "Jalan Banggol Jenerih", "Taman Ten", "Taman Jintan KB", "Kg Padang Che Minah", "Taman Desa Rahmat", "Kg Paloh", "Kg Bukit Panau", "Kg Bendang Baru", "dan kawasan sekitar"],
+      note: "Gangguan bekalan air sedang berlaku; beransur pulih berperingkat dalam tempoh 24 jam selepas kerja selesai."
+    },
+    {
+      id: "s4",
+      type: "Emergency repair",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Kerja-kerja Kecemasan Pembaikian Paip 10 Inci Di Kg Ragu, Laloh, Kuala Krai",
+      start: "16/11/2026 11:00 AM",
+      end: "16/11/2026 11:00 PM",
+      district: "Kuala Krai",
+      accounts: "± 450 akaun",
+      locations: ["Kg Laloh", "Kg Ragu", "Sg Rex", "Kg Pemberian", "Kg Manjor", "Kg Temian Gajah", "kawasan sekitar"],
+      note: "Gangguan bekalan air sementara kerja-kerja kecemasan dijalankan."
+    },
+    {
+      id: "s5",
+      type: "Emergency repair",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Pembaikan Paip Utama 10 Inci Pecah Di Kampung Laloh, Kuala Krai",
+      start: "14/11/2026 02:00 PM",
+      end: "15/11/2026 02:00 AM",
+      district: "Kuala Krai",
+      accounts: "350++ akaun",
+      locations: ["Kg Laloh", "Kg Manjor", "Kg Karangan", "kawasan sekitar"],
+      note: "Gangguan bekalan air sementara kerja-kerja kecemasan dijalankan."
+    },
+    {
+      id: "s6",
+      type: "Emergency repair",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Kecemasan Pembaikan Paip 6 Inci Di Taman Kesedar Putra, Gua Musang",
+      start: "16/11/2026 10:00 AM",
+      end: "16/11/2026 03:00 PM",
+      district: "Gua Musang",
+      accounts: "± 300 akaun",
+      locations: ["Taman Kesedar Putra"],
+      note: "Gangguan bekalan air sementara kerja-kerja kecemasan dijalankan."
+    },
+    {
+      id: "s7",
+      type: "Emergency repair",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Kecemasan Pembaikian Paip 100mm Bocor Hadapan Bangunan MARA Bachok",
+      start: "16/11/2026 10:00 AM",
+      end: "16/11/2026 08:00 PM",
+      district: "Bachok",
+      accounts: "± 1,200 akaun",
+      locations: ["Bandar Bachok", "Kg Nipah", "Kg Kemudi", "Dari Pantai Baru hingga Ke Simpang 3 Melawi", "Badak Changgong"],
+      note: "Gangguan bekalan air telah berlaku di kawasan terlibat."
+    },
+    {
+      id: "s8",
+      type: "System fault",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Gangguan Sistem Kawalan Elektronik (PLC) Pada Sistem Filter Di LRA Mini Jelawat, Bachok",
+      start: "16/11/2026 09:00 AM",
+      end: "16/11/2026 07:00 PM",
+      district: "Bachok",
+      accounts: "3,000 akaun",
+      locations: ["Pekan Jelawat", "kawasan sekitar"],
+      note: "Pelanggan terlibat akan mengalami gangguan bekalan air; beransur pulih berperingkat."
+    },
+    {
+      id: "s9",
+      type: "Planned maintenance",
+      unplanned: false,
+      status: "Dalam Tindakan",
+      title: "Pencucian Tangki Mendapan, Aerator Dan Tangki Flok Di LRA Ayer Lanas / Gemang, Jeli",
+      start: "15/11/2026 08:00 PM",
+      end: "16/11/2026 12:30 AM",
+      district: "Jeli",
+      accounts: "± 2,616 akaun",
+      locations: ["Kg Ayer Lanas", "Kg Gemang", "Kg Sg Satan", "Kg Legeh", "Bukit Bunga", "Kg Jakar"],
+      note: "Kerja-kerja berjadual; gangguan bekalan air sementara kerja dijalankan."
+    },
+    {
+      id: "s10",
+      type: "Repair in progress",
+      unplanned: true,
+      status: "Dalam Tindakan",
+      title: "Pembaikan Pam Air Mentah Di Loji Rawatan Air Jeli",
+      start: "14/11/2026 08:00 AM",
+      end: "15/11/2026 04:00 PM",
+      district: "Jeli",
+      accounts: "4,100 akaun",
+      locations: ["Bandar Jeli", "Hospital Jeli", "Politeknik", "UMK", "MRSM", "JESS", "Taman Kifayah", "Taman Ridatul Ilmi", "Lakota", "Berdang", "Pasir Dusun", "Belahat", "Seberang Jeli", "PUSPEN", "Rabbana", "Salor", "Batu Melintang", "Gunung", "Ipoh", "Lawar", "kawasan sekitar"],
+      note: "Gangguan bekalan air sedang berlaku; beransur pulih berperingkat dalam tempoh 24 jam."
+    }
+  ];
+
+  var DISTRICTS = ["Bachok", "Gua Musang", "Jeli", "Kota Bharu", "Kota Bharu Selatan", "Kota Bharu Timur", "Kota Bharu Utara", "Kuala Krai", "Machang", "Pasir Mas", "Pasir Puteh", "Tanah Merah", "Tumpat"];
+
+  var notices = NOTICES_SNAPSHOT.slice(); // current working set (live data replaces this)
+
+  // ---------- helpers ----------
+  function el(id) { return document.getElementById(id); }
+  function norm(s) { return (s || "").toLowerCase().trim(); }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+  function matchesQuery(n, district, location) {
+    var okDistrict = !district || norm(n.district) === norm(district);
+    if (!okDistrict) return false;
+    if (!location) return true;
+    var q = norm(location);
+    if (norm(n.district).indexOf(q) !== -1) return true;
+    if (norm(n.title).indexOf(q) !== -1) return true;
+    for (var i = 0; i < n.locations.length; i++) {
+      if (norm(n.locations[i]).indexOf(q) !== -1) return true;
+    }
+    return false;
+  }
+
+  // =====================================================================
+  // LIVE FETCH + PARSER
+  // Browser CORS prevents direct fetching of airkelantan.com.my from a local
+  // file, so we try public CORS proxies. If all fail we keep the snapshot.
+  // =====================================================================
+  var PROXIES = [
+    function (u) { return "https://api.allorigins.win/raw?url=" + encodeURIComponent(u); },
+    function (u) { return "https://corsproxy.io/?url=" + encodeURIComponent(u); },
+    function (u) { return "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u); }
+  ];
+
+  function fetchViaProxy(url) {
+    var i = 0;
+    function attempt() {
+      if (i >= PROXIES.length) return Promise.reject(new Error("all proxies failed"));
+      var built = PROXIES[i++](url);
+      return fetch(built, { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      }).catch(function (err) {
+        // try the next proxy
+        return attempt();
+      });
+    }
+    return attempt();
+  }
+
+  // Parse the AKSB notices page HTML into structured notices.
+  function parseAksbHtml(html) {
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    var out = [];
+    var currentDistrict = "";
+
+    var nodes = doc.querySelectorAll(".jajahan-heading, .notis-gangguan-bekalan");
+    Array.prototype.forEach.call(nodes, function (node) {
+      if (node.classList.contains("jajahan-heading")) {
+        currentDistrict = node.textContent.replace(/\d+\s*$/, "").trim();
+        return;
+      }
+      var panel = node.querySelector(".maklumat-lanjut");
+      if (!panel) return;
+
+      var dayEl = node.querySelector(".not-day");
+      var monthEl = node.querySelector(".not-month");
+      var detailPs = node.querySelectorAll(".gangguan-detail p");
+      var title = detailPs[0] ? detailPs[0].textContent.trim() : "";
+
+      // Lokasi + Tarikh lines
+      var lokasi = "", tarikh = "";
+      Array.prototype.forEach.call(detailPs, function (p) {
+        var t = p.textContent.trim();
+        if (/^lokasi\s*:/i.test(t)) lokasi = t.replace(/^lokasi\s*:\s*/i, "");
+        if (/^tarikh\s*:/i.test(t)) tarikh = t.replace(/^tarikh\s*:\s*/i, "");
+      });
+
+      var status = panel.querySelector(".status-gangguan");
+      var tambahan = panel.querySelector(".maklumat-tambahan");
+      var kawasan = panel.querySelector(".kawasan-terlibat");
+
+      var note = "";
+      if (tambahan) {
+        note = tambahan.textContent
+          .replace(/maklumat tambahan/i, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      // Affected areas + account estimate
+      var locations = [];
+      var accounts = "";
+      if (kawasan) {
+        var kText = kawasan.textContent.replace(/\s+/g, " ").trim();
+
+        // Account estimate. Patterns require +/-, ++ or "akaun" context so
+        // place names containing digits (e.g. "Simpang 3 Melawi") are safe.
+        var accMatch =
+          kText.match(/:\s*[+\/~\-\s]*([\d,]+)\s*\+{0,2}\s*ak[a-z]*/i) ||
+          kText.match(/\+\/?\s*-?\s*([\d,]+)/i) ||
+          kText.match(/([\d,]+)\s*\+{2,}/i);
+        if (accMatch) accounts = "± " + accMatch[1] + " akaun";
+
+        // Areas come after the "Kawasan ... :" label (if present)
+        var after = kText.split(/kawasan\s+(?:terlibat|yang\s+terlibat)[^:]*:?\s*/i);
+        var areas = after.length > 1 ? after[after.length - 1] : kText;
+        // Drop trailing account-estimate fragments (the source has typos
+        // like "Angaran akaun trlibat : +-1062 akaun" inside area lists)
+        areas = areas.split(/(?:bilangan|anggaran|angaran)\s+ak[a-z]*/i)[0];
+
+        locations = areas.split(/[,;&]/).map(function (s) {
+          return s
+            .replace(/^\s*(?:dan|&)\s+/i, "")                                  // leading "dan " / "&"
+            .replace(/\s*(?:dan\s+)?\b(?:kawasan|kwsan|kaw)\.?\s+sekitar(?:nya)?\.?\s*/gi, "") // "kawasan sekitar(nya)" variants
+            .replace(/\s+/g, " ")
+            .trim()
+            .replace(/[\s.]+$/, "");
+        }).filter(function (s) { return s.length > 1; })
+          .map(function (s) { return s.charAt(0).toUpperCase() + s.slice(1); });
+
+        if (/(?:kawasan|kwsan|kaw)\.?\s*sekitar/i.test(areas)) locations.push("dan kawasan sekitar");
+      }
+
+      // Classify outage type from the title
+      var unplanned, type;
+      if (/kecemasan|pecah|bocor|gangguan sistem|plc/i.test(title)) {
+        unplanned = true; type = /kecemasan|pecah|bocor/i.test(title) ? "Emergency repair" : "System fault";
+      } else if (/pembaikan|pencucian/i.test(title)) {
+        unplanned = true; type = "Repair in progress";
+      } else {
+        unplanned = false; type = "Planned maintenance";
+      }
+
+      // Tarikh "dd/mm/yyyy hh:mm AM-dd/mm/yyyy hh:mm AM"
+      var start = tarikh, end = "";
+      var parts = tarikh.split(/\s+-\s+|-/);
+      if (parts.length >= 2) { start = parts[0].trim(); end = parts.slice(1).join("-").trim(); }
+
+      out.push({
+        id: "live-" + out.length,
+        type: type,
+        unplanned: unplanned,
+        status: status ? status.textContent.trim() : "",
+        title: title,
+        start: start,
+        end: end,
+        district: currentDistrict,
+        accounts: accounts,
+        locations: locations.length ? locations : (lokasi ? [lokasi] : []),
+        note: note,
+        lokasi: lokasi
+      });
+    });
+
+    return out.filter(function (n) { return n.title && n.district; });
+  }
+
+  var loading = false;
+  function loadLive(manual) {
+    var statusBox = el("dataStatus");
+    var statusText = el("dataStatusText");
+    var btn = el("refreshBtn");
+    if (loading) return;
+    loading = true;
+    btn.disabled = true;
+    statusBox.classList.remove("live");
+    statusText.textContent = manual ? "Refreshing live data…" : "Trying to fetch live notices…";
+
+    fetchViaProxy(SOURCE_URL).then(function (html) {
+      var parsed = parseAksbHtml(html);
+      if (!parsed.length) throw new Error("no notices parsed");
+      notices = parsed;
+      statusBox.classList.add("live");
+      statusText.innerHTML = '<strong>Live data</strong> — ' + parsed.length + ' notices loaded from airkelantan.com.my at ' +
+        new Date().toLocaleTimeString() + '.';
+    }).catch(function () {
+      statusBox.classList.remove("live");
+      statusText.innerHTML = '<strong>Snapshot mode</strong> — live fetch blocked or offline; showing notices embedded on ' +
+        esc(SNAPSHOT_TIME) + '. Check the source link above for the latest.';
+    }).finally(function () {
+      loading = false;
+      btn.disabled = false;
+      renderAll();
+    });
+  }
+
+  // ---------- rendering ----------
+  function cardHTML(n, opts) {
+    opts = opts || {};
+    var chips = n.locations.map(function (loc) {
+      var hit = opts.location && norm(loc).indexOf(norm(opts.location)) !== -1;
+      return '<span class="loc-chip' + (hit ? " hit" : "") + '">' + esc(loc) + "</span>";
+    }).join("");
+    return '' +
+      '<div class="card' + (opts.matched ? " matched" : "") + '" data-id="' + esc(n.id) + '">' +
+        '<div class="row1">' +
+          '<span class="type-badge' + (n.unplanned ? " unplanned" : "") + '">' + esc(n.type) + "</span>" +
+          '<span class="district-badge">' + esc(n.district) + "</span>" +
+          (n.status ? '<span class="status-badge">' + esc(n.status) + "</span>" : "") +
+          (opts.matched ? '<span class="match-flag">&#10003; matches your area</span>' : "") +
+        "</div>" +
+        "<h3>" + esc(n.title) + "</h3>" +
+        "<dl>" +
+          "<dt>Starts</dt><dd>" + esc(n.start) + "</dd>" +
+          "<dt>Ends</dt><dd>" + esc(n.end) + "</dd>" +
+          (n.accounts ? "<dt>Accounts</dt><dd>" + esc(n.accounts) + "</dd>" : "") +
+        "</dl>" +
+        '<div class="locations"><span class="lbl">Affected locations:</span><br>' + chips + "</div>" +
+        (n.lokasi ? '<div class="locations" style="font-size:.88rem;"><span class="lbl">Work site:</span> ' + esc(n.lokasi) + "</div>" : "") +
+        (n.note ? '<div class="note"><span class="lbl">Note:</span> ' + esc(n.note) + "</div>" : "") +
+      "</div>";
+  }
+
+  // Section 1: full list, narrowed by quick filter, highlighted by matcher inputs
+  function renderList() {
+    var q = norm(el("quickFilter").value);
+    var district = el("districtSel").value;
+    var location = el("locationInput").value.trim();
+
+    var shown = notices.filter(function (n) { return matchesQuery(n, "", q); });
+    var cardsEl = el("outageCards");
+    cardsEl.innerHTML = shown.map(function (n) {
+      return cardHTML(n, { matched: matchesQuery(n, district, location), location: location });
+    }).join("");
+
+    el("listEmpty").style.display = shown.length ? "none" : "block";
+    el("listCount").innerHTML = shown.length === notices.length
+      ? "Showing all <strong>" + notices.length + "</strong> notices."
+      : "Showing <strong>" + shown.length + "</strong> of " + notices.length + " notices" + (q ? ' for &ldquo;' + esc(q) + '&rdquo;' : "") + ".";
+  }
+
+  // Section 2: matcher results
+  function renderMatcher() {
+    var district = el("districtSel").value;
+    var location = el("locationInput").value.trim();
+
+    var hits = notices.filter(function (n) { return matchesQuery(n, district, location); });
+    var cardsEl = el("matcherCards");
+
+    if (!district && !location) {
+      el("matcherResult").innerHTML = "Choose a district or type a location, then press <strong>Find my area</strong>.";
+      cardsEl.innerHTML = "";
+      el("matcherEmpty").style.display = "none";
+      return;
+    }
+
+    el("matcherResult").innerHTML = hits.length
+      ? '<strong>' + hits.length + '</strong> notice' + (hits.length > 1 ? "s" : "") + " match " +
+        (district ? "district <strong>" + esc(district) + "</strong>" : "") +
+        (district && location ? " and " : "") +
+        (location ? 'location &ldquo;' + esc(location) + '&rdquo;' : "") + "."
+      : "";
+
+    cardsEl.innerHTML = hits.map(function (n) { return cardHTML(n, { matched: true, location: location }); }).join("");
+    el("matcherEmpty").style.display = hits.length ? "none" : "block";
+  }
+
+  // Section 3: live notice view (mirrors current match set)
+  function renderLive() {
+    var district = el("districtSel").value;
+    var location = el("locationInput").value.trim();
+    var active = !!(district || location);
+
+    var hits = notices.filter(function (n) { return matchesQuery(n, district, location); });
+
+    var summary = el("liveSummary");
+    var list = el("liveList");
+    var none = el("liveNone");
+
+    if (!active) {
+      summary.innerHTML = "<strong>Waiting for your search.</strong> The live view will summarise matched notices here once you pick a district or type a location.";
+      list.innerHTML = "";
+      none.style.display = "block";
+      return;
+    }
+
+    var affectedAreas = [];
+    hits.forEach(function (n) {
+      n.locations.forEach(function (l) {
+        if (affectedAreas.indexOf(l) === -1) affectedAreas.push(l);
+      });
+    });
+
+    summary.innerHTML =
+      "<strong>Summary:</strong> " + hits.length + " notice" + (hits.length === 1 ? "" : "s") + " currently affect your selection" +
+      (district ? " (district: " + esc(district) + ")" : "") + (location ? " (location: &ldquo;" + esc(location) + "&rdquo;)" : "") + "." +
+      (affectedAreas.length
+        ? "<ul><li>" + affectedAreas.slice(0, 20).map(esc).join("</li><li>") + "</li>" +
+          (affectedAreas.length > 20 ? "<li>… and " + (affectedAreas.length - 20) + " more</li>" : "") + "</ul>"
+        : "");
+
+    list.innerHTML = hits.map(function (n) {
+      return '<div class="live-item">' +
+        '<div class="t">' + esc(n.type) + " &mdash; " + esc(n.district) + "</div>" +
+        '<div class="meta">' + esc(n.title) + " &middot; " + esc(n.start) + " to " + esc(n.end) +
+        (n.accounts ? " &middot; " + esc(n.accounts) : "") + "</div>" +
+      "</div>";
+    }).join("");
+
+    none.style.display = hits.length ? "none" : "block";
+  }
+
+  function renderAll() {
+    renderList();
+    renderMatcher();
+    renderLive();
+  }
+
+  // ---------- setup ----------
+  function init() {
+    // populate district selector (from data + known Kelantan districts)
+    var sel = el("districtSel");
+    var seen = [];
+    notices.forEach(function (n) { if (seen.indexOf(n.district) === -1) seen.push(n.district); });
+    DISTRICTS.forEach(function (d) { if (seen.indexOf(d) === -1) seen.push(d); });
+    seen.sort();
+    seen.forEach(function (d) {
+      var o = document.createElement("option");
+      o.value = d; o.textContent = d;
+      sel.appendChild(o);
+    });
+
+    // Feature 2: match by area
+    sel.addEventListener("change", renderAll);
+    el("locationInput").addEventListener("input", renderAll);
+    el("matchBtn").addEventListener("click", function () {
+      renderAll();
+      el("section-matcher").scrollIntoView({ behavior: "smooth" });
+    });
+    el("matchClear").addEventListener("click", function () {
+      sel.value = "";
+      el("locationInput").value = "";
+      renderAll();
+    });
+
+    // Feature 3: quick filter narrows the list
+    el("quickFilter").addEventListener("input", renderAll);
+    el("clearFilter").addEventListener("click", function () {
+      el("quickFilter").value = "";
+      renderAll();
+    });
+
+    // Feature 1: extract notice details into structured cards on load
+    renderAll();
+
+    // Live refresh
+    el("refreshBtn").addEventListener("click", function () { loadLive(true); });
+    loadLive(false);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
